@@ -215,9 +215,6 @@ class ChatwootImport {
     try {
       const pgClient = postgresClient.getChatwootConnection();
 
-      // Garantir que o índice único existe antes de começar
-      await this.ensureMessagesUniqueIndex();
-
       const chatwootUser = await this.getChatwootUser(provider);
       if (!chatwootUser) {
         throw new Error('User not found to import messages.');
@@ -328,7 +325,6 @@ class ChatwootImport {
             if (sqlInsertMsg.slice(-1) === ',') {
               sqlInsertMsg = sqlInsertMsg.slice(0, -1);
             }
-            sqlInsertMsg += ` ON CONFLICT (source_id, conversation_id) DO NOTHING`;
             totalMessagesImported += (await pgClient.query(sqlInsertMsg, bindInsertMsg))?.rowCount ?? 0;
           }
         }
@@ -574,25 +570,6 @@ class ChatwootImport {
 
   public isIgnorePhoneNumber(remoteJid: string) {
     return this.isGroup(remoteJid) || remoteJid === 'status@broadcast' || remoteJid === '0@s.whatsapp.net';
-  }
-
-  public async ensureMessagesUniqueIndex(): Promise<void> {
-    try {
-      const pgClient = postgresClient.getChatwootConnection();
-
-      // Cria o índice único se não existir (IF NOT EXISTS garante que não dá erro se já existir)
-      const createIndexSql = `
-        CREATE UNIQUE INDEX IF NOT EXISTS messages_source_id_conversation_id_idx 
-        ON messages(source_id, conversation_id) 
-        WHERE source_id IS NOT NULL;
-      `;
-
-      await pgClient.query(createIndexSql);
-      this.logger.debug('Unique index on messages(source_id, conversation_id) ensured');
-    } catch (error) {
-      this.logger.error(`Error ensuring unique index: ${error.toString()}`);
-      // Não lança erro para não quebrar o fluxo, mas loga o problema
-    }
   }
 
   public updateMessageSourceID(messageId: string | number, sourceId: string) {
