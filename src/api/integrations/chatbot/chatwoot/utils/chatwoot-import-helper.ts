@@ -254,7 +254,10 @@ class ChatwootImport {
       });
 
       const existingSourceIds = await this.getExistingSourceIds(messagesOrdered.map((message: any) => message.key.id));
-      messagesOrdered = messagesOrdered.filter((message: any) => !existingSourceIds.has(message.key.id));
+      messagesOrdered = messagesOrdered.filter((message: any) => {
+        const sourceIdWithPrefix = `WAID:${message.key.id.replace('WAID:', '')}`;
+        return !existingSourceIds.has(sourceIdWithPrefix);
+      });
       // processing messages in batch
       const batchSize = 4000;
       let messagesChunk: Message[] = this.sliceIntoChunks(messagesOrdered, batchSize);
@@ -384,8 +387,8 @@ class ChatwootImport {
 
               only_new_phone_number AS (
                 SELECT * FROM phone_number
-                WHERE phone_number NOT IN (
-                  SELECT phone_number
+                WHERE NOT EXISTS (
+                  SELECT 1
                   FROM contacts
                     JOIN contact_inboxes ci ON ci.contact_id = contacts.id AND ci.inbox_id = $2
                     JOIN conversations con ON con.contact_inbox_id = ci.id 
@@ -393,6 +396,8 @@ class ChatwootImport {
                       AND con.inbox_id = $2
                       AND con.contact_id = contacts.id
                   WHERE contacts.account_id = $1
+                    AND contacts.phone_number = phone_number.phone_number
+                    AND contacts.phone_number IS NOT NULL
                 )
               ),
 
